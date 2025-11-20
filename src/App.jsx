@@ -33,19 +33,12 @@ import {
   LogOut,
   Copy,
   AlertCircle,
-  PiggyBank
+  PiggyBank,
+  Globe
 } from 'lucide-react';
 
 // --- FIREBASE SETUP ---
-const firebaseConfig = {
-  apiKey: "AIzaSyBQAwmZP12UYlng6yW5Q_6QL9hXRF-Lqgk",
-  authDomain: "stock-game-ce19d.firebaseapp.com",
-  projectId: "stock-game-ce19d",
-  storageBucket: "stock-game-ce19d.firebasestorage.app",
-  messagingSenderId: "700701993342",
-  appId: "1:700701993342:web:873354a6d11cb3d8c22b2f",
-  measurementId: "G-V3K0JYTJLG"
-};
+const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -75,7 +68,16 @@ const LoginScreen = ({ onLogin, error }) => {
       await signInWithPopup(auth, provider);
     } catch (err) {
       console.error("Google Login Error:", err);
-      onLogin(null, "Google Login failed. Ensure Firebase Auth is enabled.");
+      // Provide more specific feedback based on common error codes
+      let msg = `Login failed: ${err.message}`;
+      if (err.code === 'auth/operation-not-allowed') {
+        msg = "Google Login is not enabled in Firebase Console. Go to Authentication > Sign-in method and enable Google.";
+      } else if (err.code === 'auth/unauthorized-domain') {
+        msg = "This domain is not authorized. Add it to 'Authorized Domains' in Firebase Console > Authentication > Settings.";
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        msg = "Sign-in cancelled.";
+      }
+      onLogin(null, msg);
     } finally {
       setIsLoggingIn(false);
     }
@@ -87,7 +89,7 @@ const LoginScreen = ({ onLogin, error }) => {
         await signInAnonymously(auth);
     } catch (err) {
         console.error(err);
-        onLogin(null, "Guest login failed.");
+        onLogin(null, "Guest login failed. Enable Anonymous Auth in Firebase Console.");
     } finally {
         setIsLoggingIn(false);
     }
@@ -105,8 +107,9 @@ const LoginScreen = ({ onLogin, error }) => {
         <p className="text-gray-400 text-center mb-8">Enter the trading floor.</p>
         
         {error && (
-            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-200 text-sm text-center">
-                {error}
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-200 text-sm flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-400" />
+                <span>{error}</span>
             </div>
         )}
 
@@ -147,6 +150,10 @@ const LoginScreen = ({ onLogin, error }) => {
           >
             Continue as Guest
           </button>
+          
+          <p className="text-xs text-center text-gray-500 mt-4">
+            Note: If Google Login fails on Localhost, check 'Authorized Domains' in Firebase Console.
+          </p>
         </div>
       </div>
     </div>
