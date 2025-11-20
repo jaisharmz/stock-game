@@ -32,8 +32,7 @@ import {
   AlertCircle,
   BarChart3,
   LayoutDashboard,
-  Zap,
-  Wallet
+  Zap
 } from 'lucide-react';
 
 // --- FIREBASE SETUP ---
@@ -43,16 +42,129 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'stock-zero-v1';
 
+// --- STYLES (INLINE THEME) ---
+const theme = {
+  bg: '#0b0e14',       // Deep dark background
+  panel: '#151a23',    // Slightly lighter panel
+  border: '#2a3241',   // Borders
+  text: '#ffffff',     // Main text
+  textDim: '#9ca3af',  // Secondary text
+  green: '#10b981',    // Profit/Buy
+  red: '#ef4444',      // Loss/Sell
+  blue: '#3b82f6',     // Brand
+  yellow: '#eab308',   // Warnings/Fees
+  font: 'system-ui, -apple-system, sans-serif',
+};
+
+const styles = {
+  container: {
+    minHeight: '100vh',
+    backgroundColor: theme.bg,
+    color: theme.text,
+    fontFamily: theme.font,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  centered: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    padding: '20px',
+  },
+  card: {
+    backgroundColor: theme.panel,
+    border: `1px solid ${theme.border}`,
+    borderRadius: '16px',
+    padding: '32px',
+    maxWidth: '450px',
+    width: '100%',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+  },
+  btnPrimary: {
+    backgroundColor: 'white',
+    color: 'black',
+    width: '100%',
+    padding: '14px',
+    borderRadius: '12px',
+    fontWeight: 'bold',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '10px',
+  },
+  btnSecondary: {
+    backgroundColor: '#272e3b',
+    color: 'white',
+    width: '100%',
+    padding: '14px',
+    borderRadius: '12px',
+    fontWeight: 'bold',
+    border: `1px solid ${theme.border}`,
+    cursor: 'pointer',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  input: {
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
+    color: 'white',
+    padding: '12px',
+    borderRadius: '8px',
+    fontSize: '18px',
+    fontFamily: 'monospace',
+    textAlign: 'center',
+    letterSpacing: '4px',
+    width: '100%',
+    outline: 'none',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 350px',
+    height: '100vh',
+    overflow: 'hidden',
+  },
+  header: {
+    padding: '16px 24px',
+    borderBottom: `1px solid ${theme.border}`,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(21, 26, 35, 0.8)',
+  },
+  mainArea: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    position: 'relative',
+  },
+  chartContainer: {
+    flex: 1,
+    position: 'relative',
+    padding: '20px',
+    minHeight: '300px', // Forces graph height
+  },
+  controls: {
+    padding: '24px',
+    borderTop: `1px solid ${theme.border}`,
+    backgroundColor: theme.panel,
+  },
+  sidebar: {
+    borderLeft: `1px solid ${theme.border}`,
+    backgroundColor: theme.panel,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+};
+
 // --- HELPER FUNCTIONS ---
 const generateRoomId = () => Math.floor(1000 + Math.random() * 9000).toString();
-
-const formatCurrency = (val) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2
-  }).format(val);
-};
+const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
 
 // --- COMPONENTS ---
 
@@ -60,69 +172,31 @@ const formatCurrency = (val) => {
 const LoginScreen = ({ onLogin, error }) => {
   const [loading, setLoading] = useState(false);
 
-  const handleGuestLogin = async () => {
+  const handleGuest = async () => {
     setLoading(true);
-    try {
-      await signInAnonymously(auth);
-    } catch (err) {
-      console.error(err);
-      let msg = "Guest login failed.";
-      if (err.code === 'auth/operation-not-allowed') {
-        msg = "Enable 'Anonymous' in Firebase Console > Authentication > Sign-in method.";
-      }
-      onLogin(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch (err) {
-      onLogin(err.message);
-    } finally {
-      setLoading(false);
-    }
+    try { await signInAnonymously(auth); } 
+    catch (e) { onLogin(e.message); } 
+    finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 font-sans">
-      <div className="max-w-md w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
-        <div className="flex justify-center mb-6">
-          <div className="p-4 bg-blue-600/10 rounded-full ring-1 ring-blue-500/50">
-            <Activity className="w-12 h-12 text-blue-500" />
+    <div style={styles.container}>
+      <div style={styles.centered}>
+        <div style={styles.card}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+            <Activity size={48} color={theme.green} />
           </div>
-        </div>
-        <h1 className="text-3xl font-bold text-center text-white mb-2">ZeroSum Trader</h1>
-        <p className="text-gray-400 text-center mb-8">Real-time high-frequency simulation.</p>
-
-        {error && (
-          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-200 text-sm flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" /> {error}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <button 
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full bg-white text-gray-900 font-bold py-3 rounded-xl hover:bg-gray-100 transition-all flex justify-center items-center gap-2"
-          >
+          <h1 style={{ textAlign: 'center', fontSize: '28px', fontWeight: 'bold', margin: '0 0 10px 0' }}>ZeroSum Trader</h1>
+          <p style={{ textAlign: 'center', color: theme.textDim, marginBottom: '30px' }}>Real-time market simulation</p>
+          
+          {error && <div style={{ padding: '10px', background: 'rgba(239,68,68,0.2)', color: '#fca5a5', borderRadius: '8px', marginBottom: '20px' }}>{error}</div>}
+          
+          <button onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => onLogin(e.message))} style={styles.btnPrimary}>
             Sign in with Google
           </button>
-          <div className="relative py-2">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-800"></div></div>
-            <div className="relative flex justify-center text-sm"><span className="px-2 bg-gray-900 text-gray-500">or</span></div>
-          </div>
-          <button 
-            onClick={handleGuestLogin}
-            disabled={loading}
-            className="w-full bg-gray-800 text-gray-200 font-bold py-3 rounded-xl hover:bg-gray-700 transition-all flex justify-center items-center gap-2 border border-gray-700"
-          >
-            {loading ? <Zap className="w-4 h-4 animate-pulse" /> : <Users className="w-4 h-4" />}
-            Continue as Guest
+          <div style={{ textAlign: 'center', color: theme.textDim, margin: '15px 0', fontSize: '14px' }}>- OR -</div>
+          <button onClick={handleGuest} style={styles.btnSecondary} disabled={loading}>
+            {loading ? "Connecting..." : "Continue as Guest"}
           </button>
         </div>
       </div>
@@ -133,45 +207,32 @@ const LoginScreen = ({ onLogin, error }) => {
 // 2. LOBBY SCREEN
 const LobbyScreen = ({ user, onCreate, onJoin, onSignOut }) => {
   const [code, setCode] = useState('');
-
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4">
-      <div className="absolute top-4 right-4">
-        <button onClick={onSignOut} className="text-gray-400 hover:text-white text-sm">Sign Out</button>
+    <div style={styles.container}>
+      <div style={{ position: 'absolute', top: 20, right: 20 }}>
+        <button onClick={onSignOut} style={{ background: 'none', border: 'none', color: theme.textDim, cursor: 'pointer' }}>Sign Out</button>
       </div>
-      <div className="max-w-md w-full space-y-6">
-        <div className="text-center">
-            <h2 className="text-2xl font-bold text-white">Welcome, {user.displayName || 'Trader'}</h2>
-            <p className="text-gray-500">Market is open. Choose your venue.</p>
-        </div>
-
-        <button onClick={onCreate} className="w-full group relative overflow-hidden bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl text-left hover:shadow-lg hover:shadow-blue-900/20 transition-all">
-            <div className="relative z-10 flex justify-between items-center">
-                <div>
-                    <h3 className="text-xl font-bold text-white">Create Room</h3>
-                    <p className="text-blue-100 text-sm opacity-80">Host a new trading session</p>
-                </div>
-                <Play className="text-white opacity-80 group-hover:opacity-100 transform group-hover:scale-110 transition-all" />
+      <div style={styles.centered}>
+        <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>Welcome, {user.displayName || 'Trader'}</h2>
+          </div>
+          
+          <button onClick={onCreate} style={{ ...styles.card, padding: '24px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ textAlign: 'left' }}>
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Create Room</h3>
+                <span style={{ fontSize: '12px', color: theme.textDim }}>Host a session</span>
             </div>
-        </button>
+            <Play fill="white" />
+          </button>
 
-        <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl">
-            <h3 className="text-lg font-bold text-white mb-4">Join Room</h3>
-            <div className="flex gap-2">
-                <input 
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.slice(0,4))}
-                    placeholder="0000"
-                    className="flex-1 bg-gray-950 border border-gray-700 rounded-xl px-4 text-center font-mono text-xl tracking-widest text-white focus:border-blue-500 outline-none uppercase"
-                />
-                <button 
-                    onClick={() => onJoin(code)}
-                    disabled={code.length !== 4}
-                    className="bg-gray-800 hover:bg-gray-700 text-white px-6 rounded-xl font-bold disabled:opacity-50"
-                >
-                    Join
-                </button>
+          <div style={{ ...styles.card, padding: '24px' }}>
+            <h3 style={{ marginTop: 0 }}>Join Room</h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+                <input value={code} onChange={e => setCode(e.target.value)} placeholder="0000" style={styles.input} maxLength={4} />
+                <button onClick={() => onJoin(code)} disabled={code.length !== 4} style={{ ...styles.btnSecondary, width: 'auto', padding: '0 24px' }}>Join</button>
             </div>
+          </div>
         </div>
       </div>
     </div>
@@ -180,111 +241,87 @@ const LobbyScreen = ({ user, onCreate, onJoin, onSignOut }) => {
 
 // 3. WAITING ROOM
 const WaitingRoom = ({ room, user, onStart, onLeave }) => {
-  const isHost = room.hostId === user.uid;
-  
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4 text-center">
-        <div className="mb-8">
-            <div className="text-gray-500 text-sm uppercase tracking-widest mb-2">Room Code</div>
-            <div className="text-6xl font-mono font-bold text-white tracking-widest flex items-center justify-center gap-4">
-                {room.id}
-                <button onClick={() => navigator.clipboard.writeText(room.id)} className="p-2 hover:bg-gray-900 rounded-lg"><Copy className="w-6 h-6 text-gray-600" /></button>
-            </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 w-full max-w-2xl mb-12">
+    <div style={styles.container}>
+      <div style={{ ...styles.centered, flexDirection: 'column' }}>
+        <h1 style={{ fontSize: '64px', fontFamily: 'monospace', margin: '20px 0' }}>{room.id}</h1>
+        <p style={{ color: theme.textDim }}>Waiting for players...</p>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', margin: '40px 0', width: '100%', maxWidth: '500px' }}>
             {Object.values(room.players).map(p => (
-                <div key={p.id} className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center gap-3 text-left">
-                    <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-white font-bold">
-                        {p.name ? p.name[0] : '?'}
-                    </div>
-                    <div>
-                        <div className="text-white font-medium">{p.name}</div>
-                        {p.id === room.hostId && <div className="text-xs text-yellow-500">HOST</div>}
-                    </div>
+                <div key={p.id} style={{ padding: '15px', background: theme.panel, borderRadius: '8px', border: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '30px', height: '30px', background: theme.border, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>{p.name?.[0]}</div>
+                    <span>{p.name}</span>
+                    {p.id === room.hostId && <span style={{ fontSize: '10px', color: theme.yellow, marginLeft: 'auto' }}>HOST</span>}
                 </div>
             ))}
         </div>
 
-        {isHost ? (
-            <button onClick={onStart} className="bg-green-600 hover:bg-green-500 text-white px-12 py-4 rounded-full font-bold text-xl shadow-lg shadow-green-900/20 transition-all flex items-center gap-3">
-                <Play className="fill-current" /> Open Market
-            </button>
+        {room.hostId === user.uid ? (
+            <button onClick={onStart} style={{ ...styles.btnPrimary, maxWidth: '300px', background: theme.green, color: 'white' }}>START GAME</button>
         ) : (
-            <div className="flex items-center gap-3 text-gray-500 animate-pulse">
-                <Clock /> Waiting for host to start...
-            </div>
+            <div style={{ color: theme.textDim, fontStyle: 'italic' }}>Waiting for host...</div>
         )}
-        
-        <button onClick={onLeave} className="mt-8 text-gray-600 hover:text-gray-400 text-sm">Leave Room</button>
+        <button onClick={onLeave} style={{ marginTop: '20px', background: 'none', border: 'none', color: theme.textDim, cursor: 'pointer' }}>Leave</button>
+      </div>
     </div>
   );
 };
 
-// 4. GAME: AREA CHART COMPONENT
+// 4. CHART COMPONENT (Robust SVG)
 const StockChart = ({ history }) => {
   const ref = useRef(null);
-  const [dims, setDims] = useState({ w: 0, h: 0 });
+  const [dims, setDims] = useState({ w: 1, h: 1 });
 
   useEffect(() => {
     const update = () => {
-      if(ref.current) setDims({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
+        if (ref.current) {
+            setDims({ w: ref.current.clientWidth, h: ref.current.clientHeight });
+        }
     };
     window.addEventListener('resize', update);
     update();
-    // Force update after mount to ensure flex container has sized
-    setTimeout(update, 100);
+    setTimeout(update, 500); // check again after layout
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  if (!history || history.length < 2) return <div className="h-full flex items-center justify-center text-gray-700 font-mono">WAITING FOR TICKS...</div>;
+  if (!history || history.length < 1) return null;
 
   const prices = history.map(h => h.price);
   const current = prices[prices.length - 1];
   const start = prices[0];
   const min = Math.min(...prices);
   const max = Math.max(...prices);
-  const padding = (max - min) * 0.2; // 20% padding
-  const effectiveMin = min - padding;
-  const range = (max + padding) - effectiveMin || 1;
+  const pad = (max - min) * 0.1; // 10% padding
+  const range = (max - min) + (pad * 2) || 1;
+  const effectiveMin = min - pad;
 
-  const times = history.map(h => h.time);
-  const timeRange = times[times.length - 1] - times[0] || 1;
+  const startTime = history[0].time;
+  const timeRange = (history[history.length - 1].time - startTime) || 1;
 
-  // Color logic
-  const isUp = current >= start;
-  const color = isUp ? '#10b981' : '#ef4444'; // Tailwind emerald-500 or red-500
-
-  // Generate SVG Path
-  const points = history.map((h) => {
-    const x = ((h.time - times[0]) / timeRange) * dims.w;
-    const y = dims.h - ((h.price - effectiveMin) / range) * dims.h;
-    return `${x},${y}`;
+  const points = history.map(h => {
+      const x = ((h.time - startTime) / timeRange) * dims.w;
+      const y = dims.h - ((h.price - effectiveMin) / range) * dims.h;
+      return `${x},${y}`;
   }).join(' ');
 
-  const areaPath = `0,${dims.h} ${points} ${dims.w},${dims.h}`;
+  const color = current >= start ? theme.green : theme.red;
 
   return (
-    <div ref={ref} className="w-full h-full relative overflow-hidden">
-        {/* Grid */}
-        <div className="absolute inset-0 border-t border-b border-gray-800/50"></div>
-        
-        {/* Price Labels */}
-        <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-between py-2 px-1 text-[10px] font-mono text-gray-600 pointer-events-none z-10">
+    <div ref={ref} style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: '10px', color: theme.textDim, pointerEvents: 'none' }}>
             <span>{max.toFixed(2)}</span>
             <span>{min.toFixed(2)}</span>
         </div>
-
-        <svg width="100%" height="100%" className="overflow-visible">
+        <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
             <defs>
-                <linearGradient id="grad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
+                <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
                     <stop offset="100%" stopColor={color} stopOpacity="0"/>
                 </linearGradient>
             </defs>
-            <path d={`M0,${dims.h} ${points} L${dims.w},${dims.h} Z`} fill="url(#grad)" />
-            <polyline fill="none" stroke={color} strokeWidth="2" points={points} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-            {/* Pulsing Dot */}
+            <path d={`M0,${dims.h} ${points} L${dims.w},${dims.h} Z`} fill="url(#g)" />
+            <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
             <circle cx={dims.w} cy={dims.h - ((current - effectiveMin) / range) * dims.h} r="4" fill={color} />
         </svg>
     </div>
@@ -294,150 +331,151 @@ const StockChart = ({ history }) => {
 // 5. GAME ROOM
 const GameRoom = ({ room, user, onTrade }) => {
   const [timeLeft, setTimeLeft] = useState(0);
-  const myData = room.players[user.uid];
-  const currentPrice = room.price;
-  const equity = myData.cash + (myData.shares * currentPrice);
-  const profit = equity - myData.initialValue;
+  const p = room.players[user.uid];
+  const price = room.price;
+  const equity = p.cash + (p.shares * price);
+  
+  // Responsive check for mobile
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+      const handleResize = () => setIsMobile(window.innerWidth < 768);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const end = room.startTime.seconds + room.duration;
-    const timer = setInterval(() => {
-      const rem = end - (Date.now() / 1000);
-      setTimeLeft(Math.max(0, rem));
-    }, 1000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setTimeLeft(Math.max(0, end - Date.now()/1000)), 1000);
+    return () => clearInterval(t);
   }, [room]);
 
-  const formatTime = (s) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+  const formatTime = s => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+  const isUp = room.history.length > 1 && price >= room.history[room.history.length-2].price;
+
+  // Dynamic Layout Styles
+  const layoutStyle = isMobile 
+    ? { ...styles.container, display: 'block', overflowY: 'auto' }
+    : styles.grid;
+  
+  const mainAreaStyle = isMobile
+    ? { display: 'flex', flexDirection: 'column', minHeight: '60vh' }
+    : styles.mainArea;
+
+  const sidebarStyle = isMobile
+    ? { ...styles.sidebar, borderLeft: 'none', borderTop: `1px solid ${theme.border}`, height: 'auto' }
+    : styles.sidebar;
 
   return (
-    <div className="h-screen bg-gray-950 text-white flex flex-col md:flex-row overflow-hidden font-sans">
-      
-      {/* LEFT: MAIN TRADING AREA */}
-      <div className="flex-1 flex flex-col relative border-r border-gray-800">
-        {/* Header */}
-        <header className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-gray-900/50">
-            <div className="flex items-center gap-4">
-                <div className="font-bold text-xl tracking-tight">ZERO.USD</div>
-                <div className={`text-2xl font-mono font-bold ${room.history.length > 1 && currentPrice >= room.history[room.history.length-2].price ? 'text-emerald-500' : 'text-red-500'}`}>
-                    {formatCurrency(currentPrice)}
-                </div>
-            </div>
-            <div className="flex items-center gap-6 text-sm">
-                <div className="flex flex-col items-end">
-                    <span className="text-gray-500 text-[10px] uppercase">Fee Pool</span>
-                    <span className="text-yellow-500 font-mono">{formatCurrency(room.transactionCosts || 0)}</span>
-                </div>
-                <div className="bg-gray-800 px-3 py-1 rounded font-mono text-white">
-                    {formatTime(timeLeft)}
-                </div>
-            </div>
-        </header>
-
-        {/* Chart Container - Flex 1 to fill available space */}
-        <div className="flex-1 min-h-0 p-4">
-            <div className="w-full h-full bg-gray-900/30 rounded-xl border border-gray-800/50 relative">
-               <StockChart history={room.history} />
-            </div>
-        </div>
-
-        {/* Controls */}
-        <div className="h-auto border-t border-gray-800 bg-gray-900 p-6">
-            <div className="flex justify-between items-end mb-4 max-w-4xl mx-auto">
+    <div style={layoutStyle}>
+        {/* LEFT / TOP: CHART & CONTROLS */}
+        <div style={mainAreaStyle}>
+            <header style={styles.header}>
                 <div>
-                    <div className="text-gray-500 text-xs uppercase mb-1">Buying Power</div>
-                    <div className="text-2xl font-mono font-bold text-white">{formatCurrency(myData.cash)}</div>
+                    <div style={{ fontSize: '12px', color: theme.textDim }}>ZERO/USD</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: isUp ? theme.green : theme.red, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {formatCurrency(price)}
+                        {isUp ? <TrendingUp size={20}/> : <TrendingDown size={20}/>}
+                    </div>
                 </div>
-                <div className="text-right">
-                    <div className="text-gray-500 text-xs uppercase mb-1">Position</div>
-                    <div className="text-2xl font-mono font-bold text-blue-400">{myData.shares} <span className="text-sm text-gray-500">SHARES</span></div>
+                <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '12px', color: theme.textDim }}>TIMER</div>
+                    <div style={{ fontSize: '20px', fontFamily: 'monospace', color: timeLeft < 30 ? theme.red : theme.text }}>{formatTime(timeLeft)}</div>
                 </div>
+            </header>
+
+            <div style={styles.chartContainer}>
+                <StockChart history={room.history} />
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 max-w-4xl mx-auto h-16">
-                <button 
-                    onClick={() => onTrade('sell')}
-                    disabled={myData.shares <= 0}
-                    className="bg-red-500/10 hover:bg-red-600 hover:text-white text-red-500 border border-red-500/50 rounded-lg font-bold text-lg transition-all flex flex-col items-center justify-center disabled:opacity-30"
-                >
-                    <span>SELL</span>
-                    <span className="text-[10px] font-mono opacity-75">BID {formatCurrency(currentPrice - 1)}</span>
-                </button>
-                <button 
-                    onClick={() => onTrade('buy')}
-                    disabled={myData.cash < currentPrice}
-                    className="bg-emerald-500/10 hover:bg-emerald-600 hover:text-white text-emerald-500 border border-emerald-500/50 rounded-lg font-bold text-lg transition-all flex flex-col items-center justify-center disabled:opacity-30"
-                >
-                    <span>BUY</span>
-                    <span className="text-[10px] font-mono opacity-75">ASK {formatCurrency(currentPrice)}</span>
-                </button>
+
+            <div style={styles.controls}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                    <div>
+                        <div style={{ fontSize: '10px', color: theme.textDim, textTransform: 'uppercase' }}>Available Cash</div>
+                        <div style={{ fontSize: '18px', fontFamily: 'monospace' }}>{formatCurrency(p.cash)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', color: theme.textDim, textTransform: 'uppercase' }}>Shares Held</div>
+                        <div style={{ fontSize: '18px', fontFamily: 'monospace', color: theme.blue }}>{p.shares}</div>
+                    </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <button 
+                        onClick={() => onTrade('sell')} 
+                        disabled={p.shares <= 0}
+                        style={{ ...styles.btnSecondary, background: 'rgba(239, 68, 68, 0.1)', borderColor: theme.red, color: theme.red, opacity: p.shares <= 0 ? 0.5 : 1 }}
+                    >
+                        SELL
+                    </button>
+                    <button 
+                        onClick={() => onTrade('buy')} 
+                        disabled={p.cash < price}
+                        style={{ ...styles.btnSecondary, background: 'rgba(16, 185, 129, 0.1)', borderColor: theme.green, color: theme.green, opacity: p.cash < price ? 0.5 : 1 }}
+                    >
+                        BUY
+                    </button>
+                </div>
             </div>
         </div>
-      </div>
 
-      {/* RIGHT: SIDEBAR */}
-      <div className="w-full md:w-80 bg-gray-900 flex flex-col">
-         <div className="p-6 border-b border-gray-800">
-             <div className="text-gray-500 text-[10px] uppercase tracking-wider mb-2">My Portfolio</div>
-             <div className="flex justify-between items-baseline">
-                 <span className="text-2xl font-bold text-white">{formatCurrency(equity)}</span>
-                 <span className={`font-bold text-sm ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                     {profit >= 0 ? '+' : ''}{profit.toFixed(2)}
-                 </span>
-             </div>
-         </div>
-         
-         <div className="flex-1 overflow-hidden flex flex-col">
-             <div className="p-4 bg-gray-800/50 text-[10px] uppercase text-gray-400 font-bold tracking-wider flex justify-between">
-                 <span>Trader</span>
-                 <span>Equity</span>
-             </div>
-             <div className="flex-1 overflow-y-auto">
-                 {Object.values(room.players)
-                    .sort((a,b) => (b.cash + b.shares*currentPrice) - (a.cash + a.shares*currentPrice))
-                    .map((p, i) => (
-                     <div key={p.id} className={`flex justify-between items-center p-4 border-b border-gray-800 ${p.id === user.uid ? 'bg-blue-900/20' : ''}`}>
-                         <div className="flex items-center gap-3">
-                             <span className="font-mono text-gray-500 w-4">{i+1}</span>
-                             <span className="text-sm font-medium text-gray-200 truncate w-24">{p.name}</span>
-                         </div>
-                         <div className="font-mono text-sm text-white">
-                             {formatCurrency(p.cash + (p.shares * currentPrice))}
-                         </div>
-                     </div>
-                 ))}
-             </div>
-         </div>
-      </div>
+        {/* RIGHT / BOTTOM: LEADERBOARD */}
+        <div style={sidebarStyle}>
+            <div style={{ padding: '20px', borderBottom: `1px solid ${theme.border}`, background: 'rgba(0,0,0,0.2)' }}>
+                <div style={{ fontSize: '10px', color: theme.textDim, textTransform: 'uppercase', marginBottom: '5px' }}>Total Equity</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{formatCurrency(equity)}</div>
+                <div style={{ fontSize: '14px', color: equity >= p.initialValue ? theme.green : theme.red }}>
+                    {((equity - p.initialValue) / p.initialValue * 100).toFixed(2)}%
+                </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div style={{ padding: '10px 20px', display: 'flex', fontSize: '10px', color: theme.textDim, textTransform: 'uppercase', fontWeight: 'bold' }}>
+                    <span style={{ flex: 1 }}>Trader</span>
+                    <span>Net Worth</span>
+                </div>
+                {Object.values(room.players)
+                    .sort((a,b) => (b.cash + b.shares*price) - (a.cash + a.shares*price))
+                    .map((pl, i) => (
+                        <div key={pl.id} style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${theme.border}`, background: pl.id === user.uid ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }}>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <span style={{ color: theme.textDim, fontFamily: 'monospace', width: '20px' }}>{i+1}</span>
+                                <span style={{ fontWeight: pl.id === user.uid ? 'bold' : 'normal' }}>{pl.name}</span>
+                            </div>
+                            <span style={{ fontFamily: 'monospace' }}>{formatCurrency(pl.cash + pl.shares*price)}</span>
+                        </div>
+                    ))
+                }
+            </div>
+        </div>
     </div>
   );
 };
 
-// 6. RESULTS SCREEN
+// 6. RESULTS
 const ResultsScreen = ({ room, user, onLeave }) => {
-  const finalPrice = room.price;
-  const sorted = Object.values(room.players).sort((a,b) => (b.cash + b.shares*finalPrice) - (a.cash + a.shares*finalPrice));
-  const winner = sorted[0];
-  
-  return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
-        <div className="max-w-lg w-full bg-gray-900 border border-gray-800 rounded-3xl p-8 text-center">
-            <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-6" />
-            <h1 className="text-4xl font-bold text-white mb-2">Market Closed</h1>
-            <div className="text-gray-400 mb-8">Winner: <span className="text-white font-bold">{winner.name}</span></div>
-            
-            <div className="bg-gray-800/50 rounded-xl overflow-hidden mb-8">
-                {sorted.slice(0, 5).map((p, i) => (
-                    <div key={p.id} className="flex justify-between p-4 border-b border-gray-800 last:border-0">
-                        <span className="text-gray-300">#{i+1} {p.name}</span>
-                        <span className="font-mono text-white font-bold">{formatCurrency(p.cash + p.shares*finalPrice)}</span>
+    const finalPrice = room.price;
+    const sorted = Object.values(room.players).sort((a,b) => (b.cash + b.shares*finalPrice) - (a.cash + a.shares*finalPrice));
+    return (
+        <div style={styles.container}>
+            <div style={styles.centered}>
+                <div style={{ ...styles.card, textAlign: 'center' }}>
+                    <Trophy size={48} color={theme.yellow} style={{ margin: '0 auto 20px auto' }} />
+                    <h1 style={{ fontSize: '32px', margin: '0 0 10px 0' }}>Market Closed</h1>
+                    <p style={{ color: theme.textDim, marginBottom: '30px' }}>Winner: {sorted[0].name}</p>
+                    
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '12px', overflow: 'hidden', marginBottom: '20px' }}>
+                        {sorted.slice(0, 5).map((p, i) => (
+                            <div key={p.id} style={{ padding: '12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between' }}>
+                                <span>#{i+1} {p.name}</span>
+                                <span style={{ fontFamily: 'monospace' }}>{formatCurrency(p.cash + p.shares*finalPrice)}</span>
+                            </div>
+                        ))}
                     </div>
-                ))}
+                    <button onClick={onLeave} style={styles.btnPrimary}>Back to Lobby</button>
+                </div>
             </div>
-            <button onClick={onLeave} className="w-full bg-white text-gray-900 font-bold py-3 rounded-xl hover:bg-gray-200">Return to Lobby</button>
         </div>
-    </div>
-  );
+    );
 };
 
 // --- MAIN APP ---
@@ -449,18 +487,17 @@ export default function App() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser({ uid: u.uid, displayName: u.displayName || 'Guest' });
         if(view === 'login') setView('lobby');
       } else {
-        setUser(null);
-        setView('login');
+        setUser(null); setView('login');
       }
     });
+    return () => unsub();
   }, [view]);
 
-  // Room Sync
   useEffect(() => {
     if (!room?.id) return;
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', room.id), (snap) => {
@@ -470,14 +507,13 @@ export default function App() {
         if (data.status === 'playing' && view === 'waiting') setView('game');
         if (data.status === 'finished') setView('results');
         
-        // Host Auto-End
         if (data.status === 'playing' && user?.uid === data.hostId) {
-            if ((Date.now()/1000) > (data.startTime.seconds + data.duration)) {
-                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', room.id), { status: 'finished' });
-            }
+             if ((Date.now()/1000) > (data.startTime.seconds + data.duration)) {
+                 updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', room.id), { status: 'finished' });
+             }
         }
       } else {
-        setRoom(null); setView('lobby');
+        setRoom(null); setView('lobby'); setError("Room closed");
       }
     });
     return () => unsub();
@@ -498,11 +534,15 @@ export default function App() {
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
     const snap = await getDoc(ref);
     if (!snap.exists()) return setError('Room not found');
+    const data = snap.data();
+    if (data.status !== 'waiting') return setError('Game in progress');
+    
     await updateDoc(ref, { [`players.${user.uid}`]: { id: user.uid, name: user.displayName, cash: 1000, shares: 0, initialValue: 1000 } });
-    setRoom(snap.data()); setView('waiting');
+    setRoom(data); setView('waiting');
   };
 
   const trade = async (type) => {
+    if (!room) return;
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', room.id);
     const snap = await getDoc(ref);
     const data = snap.data();
@@ -533,7 +573,7 @@ export default function App() {
   };
 
   return (
-    <div className="bg-gray-950 min-h-screen text-white font-sans">
+    <div style={styles.container}>
       {view === 'login' && <LoginScreen onLogin={setError} error={error} />}
       {view === 'lobby' && user && <LobbyScreen user={user} onCreate={createRoom} onJoin={joinRoom} onSignOut={() => signOut(auth)} />}
       {view === 'waiting' && room && <WaitingRoom room={room} user={user} onStart={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'rooms', room.id), { status: 'playing', startTime: serverTimestamp() })} onLeave={() => {setRoom(null); setView('lobby');}} />}
