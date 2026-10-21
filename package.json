@@ -1,29 +1,37 @@
 {
-  "name": "my-stock-game",
+  "name": "zerosum",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:emu": "firebase emulators:exec --only auth,firestore --project demo-zerosum --ui \"vite --mode emulator --port 5182\"",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-zerosum",
     "build": "vite build",
+    "preview": "vite preview",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "test": "node --test test/engine.test.js",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-zerosum \"node --test test/rules.test.js\"",
+    "deploy": "npm run build && firebase deploy --only hosting,firestore"
   },
   "dependencies": {
-    "firebase": "^12.6.0",
-    "lucide-react": "^0.554.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "firebase": "^13.0.0",
+    "lucide-react": "^1.60.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^9.39.5",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "@vitejs/plugin-react": "^5.1.0",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
-    "vite": "^7.2.2"
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "firebase-tools": "^15.34.0",
+    "globals": "^17.13.0",
+    "vite": "^8.3.4"
   }
 }

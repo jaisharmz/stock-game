@@ -1,0 +1,371 @@
+rules_version = '2';
+
+// There is no server. These rules are the server: they decide who may sign up, who may
+// host, and whether a trade is honest. A trade is one transaction that moves the market
+// (market/state), the trader's position, and appends a trade record; each of the three
+// checks the other two with getAfter(), and the position repeats the price line from
+// src/engine/curve.js, so a client cannot fill at a price it made up.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- who you are ----------
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function me() {
+      return request.auth.uid;
+    }
+    function accessDoc(uid) {
+      return /databases/$(database)/documents/access/$(uid);
+    }
+    function isOpen() {
+      let settings = /databases/$(database)/documents/meta/settings;
+      return exists(settings) && get(settings).data.mode == 'open';
+    }
+    // A member may host rooms. Anyone signed in may play in a room whose code they have.
+    function isMember() {
+      return signedIn() && (exists(accessDoc(me())) || isOpen());
+    }
+    function isAdmin() {
+      return signedIn() && exists(accessDoc(me())) && get(accessDoc(me())).data.role == 'admin';
+    }
+    function exactKeys(keys) {
+      return request.resource.data.keys().hasAll(keys) && request.resource.data.keys().hasOnly(keys);
+    }
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    function validName(name) {
+      return name is string && name.size() >= 1 && name.size() <= 24;
+    }
+
+    // ---------- access: owner, invites, members ----------
+
+    // The first person to claim an empty deployment owns it. No one is named in code.
+    match /meta/owner {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && exactKeys(['uid', 'at'])
+        && request.resource.data.uid == me()
+        && request.resource.data.at == request.time
+        && getAfter(accessDoc(me())).data.role == 'admin';
+    }
+
+    // mode 'invite' keeps hosting to members; 'open' lets anyone signed in host.
+    match /meta/settings {
+      allow get: if signedIn();
+      allow create, update: if isAdmin()
+        && exactKeys(['mode', 'by', 'at'])
+        && request.resource.data.mode in ['invite', 'open']
+        && request.resource.data.by == me()
+        && request.resource.data.at == request.time;
+    }
+
+    match /access/{uid} {
+      allow get: if signedIn() && (uid == me() || isAdmin());
+      allow list: if isAdmin();
+      allow create: if signedIn() && uid == me()
+        && exactKeys(['role', 'via', 'at', 'name', 'email'])
+        && request.resource.data.at == request.time
+        && request.resource.data.name is string && request.resource.data.name.size() <= 60
+        && request.resource.data.email == request.auth.token.email
+        && (claimsOwnership() || redeemsInvite(request.resource.data.via));
+      allow delete: if isAdmin() && uid != me();
+    }
+    function claimsOwnership() {
+      let owner = /databases/$(database)/documents/meta/owner;
+      return request.resource.data.role == 'admin'
+        && request.resource.data.via == 'owner'
+        && !exists(owner)
+        && getAfter(owner).data.uid == me();
+    }
+    function redeemsInvite(code) {
+      let invite = /databases/$(database)/documents/invites/$(code);
+      return request.resource.data.role == 'member'
+        && code is string && code.matches('^[a-z0-9-]{6,40}$')
+        && exists(invite)
+        && getAfter(invite).data.uses == get(invite).data.uses + 1;
+    }
+
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow list, delete: if isAdmin();
+      allow create: if isAdmin()
+        && code.matches('^[a-z0-9-]{6,40}$')
+        && exactKeys(['uses', 'maxUses', 'by', 'at', 'expiresAt', 'note'])
+        && request.resource.data.uses == 0
+        && request.resource.data.maxUses is int
+        && request.resource.data.maxUses >= 1 && request.resource.data.maxUses <= 500
+        && request.resource.data.by == me()
+        && request.resource.data.at == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.note is string && request.resource.data.note.size() <= 80;
+      // Redeeming: one use, in the same batch that creates your access with this code.
+      allow update: if signedIn()
+        && changed().hasOnly(['uses'])
+        && request.resource.data.uses == resource.data.uses + 1
+        && resource.data.uses < resource.data.maxUses
+        && request.time < resource.data.expiresAt
+        && !exists(accessDoc(me()))
+        && getAfter(accessDoc(me())).data.via == code;
+    }
+
+    // ---------- your own profile and the rooms you played ----------
+
+    match /users/{uid} {
+      allow read, delete: if signedIn() && uid == me();
+      allow create, update: if signedIn() && uid == me()
+        && request.resource.data.keys().hasOnly(['name', 'photo', 'seenAt'])
+        && validName(request.resource.data.name)
+        && request.resource.data.seenAt == request.time;
+      match /games/{code} {
+        allow read, delete: if signedIn() && uid == me();
+        allow create, update: if signedIn() && uid == me()
+          && exactKeys(['code', 'at', 'host'])
+          && request.resource.data.code == code
+          && request.resource.data.host is bool;
+      }
+    }
+
+    // ---------- rooms ----------
+
+    match /rooms/{code} {
+      function roomDoc() {
+        return /databases/$(database)/documents/rooms/$(code);
+      }
+      function room() {
+        return get(roomDoc()).data;
+      }
+      function isHost() {
+        return signedIn() && room().hostUid == me();
+      }
+      function playerDoc(pid) {
+        return /databases/$(database)/documents/rooms/$(code)/players/$(pid);
+      }
+      function inRoom() {
+        return signedIn() && (exists(playerDoc(me())) || room().hostUid == me());
+      }
+      function isBot(pid) {
+        return pid.matches('^bot-[a-z0-9]{1,16}$');
+      }
+      // People trade for themselves; the host's screen trades for the bots.
+      function actsFor(pid) {
+        return signedIn() && pid is string && exists(playerDoc(pid))
+          && (pid == me() || (isBot(pid) && isHost()));
+      }
+
+      // Codes are not listable: you need the code to find a room.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if isMember()
+        && code.matches('^[A-HJKMNP-Z2-9]{5}$')
+        && exactKeys(['hostUid', 'hostName', 'status', 'current', 'plan', 'minutes', 'hostPlays', 'createdAt', 'expiresAt'])
+        && request.resource.data.hostUid == me()
+        && validName(request.resource.data.hostName)
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.current == -1
+        && request.resource.data.plan is list
+        && request.resource.data.plan.size() >= 1 && request.resource.data.plan.size() <= 12
+        && request.resource.data.minutes is int
+        && request.resource.data.hostPlays is bool
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt <= request.time + duration.value(75, 'm');
+      allow update: if signedIn() && resource.data.hostUid == me()
+        && !changed().hasAny(['hostUid', 'createdAt', 'expiresAt'])
+        && request.resource.data.status in ['lobby', 'playing', 'done']
+        && request.resource.data.current is int
+        && request.resource.data.plan is list
+        && request.resource.data.plan.size() >= 1 && request.resource.data.plan.size() <= 12
+        && (resource.data.status == 'lobby' || !changed().hasAny(['plan', 'minutes', 'hostPlays']));
+
+      match /players/{pid} {
+        allow read: if inRoom();
+        allow create: if signedIn()
+          && ((pid == me() && room().status != 'done' && request.time < room().expiresAt)
+              || (isBot(pid) && isHost()))
+          && exactKeys(['name', 'bot', 'joinedAt'])
+          && request.resource.data.bot == isBot(pid)
+          && validName(request.resource.data.name)
+          && request.resource.data.joinedAt == request.time;
+        allow update: if signedIn() && (pid == me() || (isBot(pid) && isHost()))
+          && changed().hasOnly(['name'])
+          && validName(request.resource.data.name);
+        allow delete: if isBot(pid) && isHost();
+      }
+
+      // The host's own notes (custom questions). Nobody else can read them.
+      match /private/{doc} {
+        allow read, write: if isHost();
+      }
+
+      match /rounds/{n} {
+        function roundDoc() {
+          return /databases/$(database)/documents/rooms/$(code)/rounds/$(n);
+        }
+        function rnd() {
+          return get(roundDoc()).data;
+        }
+        function stateDoc() {
+          return /databases/$(database)/documents/rooms/$(code)/rounds/$(n)/market/state;
+        }
+        function posDoc(pid) {
+          return /databases/$(database)/documents/rooms/$(code)/rounds/$(n)/positions/$(pid);
+        }
+        function tradeDoc(tid) {
+          return /databases/$(database)/documents/rooms/$(code)/rounds/$(n)/trades/$(tid);
+        }
+        function live(r) {
+          return r.status == 'live' && request.time >= r.startsAt && request.time < r.endsAt;
+        }
+        function posBefore(pid, r) {
+          return exists(posDoc(pid))
+            ? get(posDoc(pid)).data
+            : {'shares': 0, 'cash': r.startCash, 'k': 0, 'fees': 0, 'lastAt': timestamp.value(0)};
+        }
+
+        allow read: if inRoom();
+        allow create: if isHost() && room().status == 'playing' && newRound(request.resource.data);
+        allow update: if isHost() && resource.data.status == 'live'
+          && changed().hasOnly(['info', 'status', 'secret', 'value', 'settledAt'])
+          && (request.resource.data.status == 'live'
+                ? changed().hasOnly(['info']) && request.resource.data.info is map
+                : request.resource.data.status == 'settled'
+                  && request.time >= resource.data.endsAt
+                  && request.resource.data.settledAt == request.time
+                  && settles(resource.data, request.resource.data));
+
+        function newRound(d) {
+          return exactKeys(['n', 'kind', 'p0', 's', 'feeBps', 'maxPos', 'maxOrder', 'startCash', 'info', 'startsAt', 'endsAt', 'status', 'commit'])
+            && n == string(room().current) && d.n == room().current
+            && d.kind in ['free', 'cards', 'chart', 'question']
+            && d.p0 is int && d.p0 >= 0 && d.p0 <= 100000000
+            && d.s is int && d.s >= 1 && d.s <= 1000000
+            && d.feeBps is int && d.feeBps >= 0 && d.feeBps <= 100
+            && d.maxPos is int && d.maxPos >= 1 && d.maxPos <= 100
+            && d.maxOrder is int && d.maxOrder >= 1 && d.maxOrder <= 20
+            && d.startCash is int && d.startCash >= 0 && d.startCash <= 100000000
+            && d.info is map
+            && d.status == 'live'
+            && d.startsAt is timestamp
+            && d.startsAt >= request.time - duration.value(10, 's')
+            && d.startsAt <= request.time + duration.value(30, 's')
+            && d.endsAt is timestamp
+            && d.endsAt > d.startsAt
+            && d.endsAt <= d.startsAt + duration.value(10, 'm')
+            && d.endsAt <= room().expiresAt
+            && d.commit is string
+            && (d.kind == 'free' ? d.commit == '' : d.commit.matches('^[0-9a-f]{64}$'));
+        }
+
+        // A hidden value is committed as a SHA-256 hash when the round opens, and the
+        // settlement must be the text that hashes to it. The value is its first field.
+        function settles(a, b) {
+          return a.kind == 'free'
+            ? !b.keys().hasAny(['secret', 'value'])
+            : b.secret is string && b.secret.size() < 20000
+              && hashing.sha256(b.secret).toHexString().lower() == a.commit
+              && b.value is int
+              && string(b.value) == b.secret.split('[|]')[0];
+        }
+
+        // Only the host deals, and only the player and the host see a card.
+        match /hands/{pid} {
+          allow get: if signedIn() && (pid == me() || isHost());
+          allow list: if isHost();
+          allow create: if isHost()
+            && getAfter(roundDoc()).data.status == 'live'
+            && exactKeys(['card'])
+            && request.resource.data.card is int
+            && request.resource.data.card >= 1 && request.resource.data.card <= 50;
+        }
+
+        // The hidden value, its salt and the reveal schedule, for the host's reloads.
+        match /vault/{doc} {
+          allow read, write: if isHost();
+        }
+
+        match /market/{doc} {
+          allow read: if inRoom();
+          allow create: if isHost() && doc == 'state'
+            && exactKeys(['q', 'trades', 'price', 'lastBy', 'lastAt'])
+            && request.resource.data.q == 0
+            && request.resource.data.trades == 0
+            && request.resource.data.price == getAfter(roundDoc()).data.p0
+            && request.resource.data.lastBy == ''
+            && request.resource.data.lastAt == request.time;
+          allow update: if doc == 'state' && movesMarket(resource.data, request.resource.data);
+        }
+        function movesMarket(a, b) {
+          let r = rnd();
+          let pid = b.lastBy;
+          let d = b.q - a.q;
+          let before = posBefore(pid, r);
+          let after = getAfter(posDoc(pid)).data;
+          return actsFor(pid) && live(r)
+            && exactKeys(['q', 'trades', 'price', 'lastBy', 'lastAt'])
+            && b.q is int
+            && b.trades == a.trades + 1
+            && b.price == r.p0 + r.s * b.q
+            && b.price >= 0
+            && b.lastAt == request.time
+            && d != 0 && d <= r.maxOrder && d >= -r.maxOrder
+            && after.shares - before.shares == d
+            && after.k == before.k + 1;
+        }
+
+        match /positions/{pid} {
+          allow read: if inRoom();
+          allow create, update: if actsFor(pid) && movesPosition(pid, request.resource.data);
+        }
+        function movesPosition(pid, b) {
+          let r = rnd();
+          let a = posBefore(pid, r);
+          let s0 = get(stateDoc()).data;
+          let s1 = getAfter(stateDoc()).data;
+          let d = b.shares - a.shares;
+          let q = s0.q;
+          // cost = F(q + d) - F(q) for F(x) = p0*x + s*x*(x-1)/2; d*(d-1) is always even
+          let c = d * r.p0 + r.s * (d * q + d * (d - 1) / 2);
+          let f = math.floor(math.abs(c) * r.feeBps / 10000);
+          return live(r)
+            && exactKeys(['shares', 'cash', 'k', 'fees', 'lastAt'])
+            && b.shares is int
+            && s1.q == q + d
+            && s1.lastBy == pid
+            && s1.trades == s0.trades + 1
+            && b.k == a.k + 1
+            && b.cash == a.cash - c - f
+            && b.fees == a.fees + f
+            && b.shares <= r.maxPos && b.shares >= -r.maxPos
+            && b.lastAt == request.time
+            && request.time >= a.lastAt + duration.value(250, 'ms')
+            && existsAfter(tradeDoc(pid + '-' + string(b.k)));
+        }
+
+        match /trades/{tid} {
+          allow read: if inRoom();
+          allow create: if recordsTrade(tid, request.resource.data);
+        }
+        function recordsTrade(tid, t) {
+          let pid = t.pid;
+          let r = rnd();
+          let before = posBefore(pid, r);
+          let after = getAfter(posDoc(pid)).data;
+          return actsFor(pid) && live(r)
+            && exactKeys(['pid', 'd', 'q', 'price', 'cost', 'fee', 'at'])
+            && tid == pid + '-' + string(after.k)
+            && t.d == after.shares - before.shares
+            && t.q == get(stateDoc()).data.q
+            && t.price == getAfter(stateDoc()).data.price
+            && t.fee == after.fees - before.fees
+            && t.cost == before.cash - after.cash - t.fee
+            && t.at == request.time;
+        }
+      }
+    }
+  }
+}
