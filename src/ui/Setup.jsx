@@ -39,7 +39,7 @@ export function Setup({ mode, onCreate }) {
 
   return (
     <form className="card setup" onSubmit={submit}>
-      <h2>{hosted ? "Host a room" : "Practice against bots"}</h2>
+      <h2>{hosted ? "Make a room" : "Practice against bots"}</h2>
       <p className="dim small">{hosted ? "Friends join with the room code on their phones. Put this screen where everyone can see it." : "Runs in this browser only. Nothing is saved."}</p>
 
       <fieldset>
@@ -138,7 +138,7 @@ export function Setup({ mode, onCreate }) {
       )}
       {error && <p className="warn">{error}</p>}
       <button className="btn primary wide" disabled={busy}>
-        <Play size={16} /> {hosted ? "Open the room" : "Start practice"}
+        <Play size={16} /> {hosted ? "Make the room" : "Start practice"}
       </button>
     </form>
   );

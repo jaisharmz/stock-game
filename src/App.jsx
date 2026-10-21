@@ -14,6 +14,7 @@ import { Admin } from "./ui/Admin.jsx";
 import { Recap, Profile } from "./ui/Recap.jsx";
 import { isRoomCode } from "./engine/host.js";
 
+const NO_ACCESS = { role: null, member: false, admin: false, open: false, claimable: false };
 const firstName = (user) => (user?.displayName ?? "").split(" ")[0] || "Trader";
 
 function SignInGate({ why }) {
@@ -50,9 +51,9 @@ function Practice({ user }) {
 export default function App() {
   const [page = "", arg] = useRoute();
   const [user, setUser] = useState(configured ? undefined : null);
-  const [access, setAccess] = useState(null);
-
-  const refreshAccess = useCallback(async (u) => setAccess(u ? await loadAccess(u).catch(() => null) : null), []);
+  // undefined while loading; a failed load counts as no access rather than hanging.
+  const [access, setAccess] = useState(undefined);
+  const refreshAccess = useCallback(async (u) => setAccess(u ? await loadAccess(u).catch(() => NO_ACCESS) : undefined), []);
 
   useEffect(() => {
     if (!configured) return;
@@ -61,7 +62,7 @@ export default function App() {
       if (u) {
         await touchProfile(u).catch(() => {});
         await refreshAccess(u);
-      } else setAccess(null);
+      } else setAccess(undefined);
     });
   }, [refreshAccess]);
 
@@ -86,8 +87,14 @@ export default function App() {
   else if (page === "practice") body = <Practice key="practice" user={user} />;
   else if (!configured && page) body = <p className="center dim">Firebase is not configured for this build; only practice works.</p>;
   else if (page === "host")
-    body = needsUser("Hosting needs an account.", () =>
-      access?.member ? <Setup mode="host" onCreate={async (opts) => go(`room/${await createRoom(user, opts)}`)} /> : <p className="center dim">Hosting is invite-only for now. Redeem an invite on the home page.</p>,
+    body = needsUser("Sign in with Google to make a room.", () =>
+      access === undefined ? (
+        <p className="center dim">Checking…</p>
+      ) : access.member ? (
+        <Setup mode="host" onCreate={async (opts) => go(`room/${await createRoom(user, opts)}`)} />
+      ) : (
+        <p className="center dim">Making rooms is invite-only right now. Redeem an invite on the home page.</p>
+      ),
     );
   else if ((page === "room" || page === "join") && arg) {
     const code = arg.toUpperCase();

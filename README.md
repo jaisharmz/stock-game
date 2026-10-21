@@ -40,8 +40,7 @@ The project is `stock-game-ce19d`. These steps need the owner's own login and cl
 2. In the Firebase console, turn on Authentication with the Google provider, and create a Firestore database in production mode.
 3. `npm run deploy` builds the app and deploys Hosting, `firestore.rules` and `firestore.indexes.json`. The site is then at https://stock-game-ce19d.web.app.
 4. Open the site, sign in, and press "Claim this deployment". The first person to claim an unowned deployment becomes its admin, so no name or email is written into the code.
-5. Make invites on the Admin page and send the links. An invite lets someone host rooms. Anyone signed in can join a room whose code they have.
-6. To let anyone host, press "Open hosting to everyone" on the Admin page. No code changes.
+5. A new deployment starts with making rooms limited to invited people. Press "Open hosting to everyone" on the Admin page to let anyone signed in make a room (the live site is open), or make invites there and send the links. Anyone signed in can join a room whose code they have.
 
 ## How it stays honest without a server
 
@@ -51,7 +50,7 @@ There is no backend. `firestore.rules` does the server's job, and the client can
 - Hidden values. When a card, chart or question round opens, the host's screen publishes the SHA-256 hash of the value and a random salt. The database accepts a settlement only if its text hashes to that commitment, so the host cannot change the answer after seeing the trades.
 - Cards. A card is readable only by its player and by the host's screen, which dealt it. A host who also trades is tagged as dealer in those rounds and sits off that round's podium.
 - Scores. Leaderboards, recaps and the profile page recompute every score from the rule-checked positions and the settlement, so there is no stored score to tamper with.
-- Access. Sign-in is Google only. Hosting needs an invite, unless an admin has opened hosting to everyone. Rooms cannot be listed, so a room is found only by its code. Players write only their own player and position documents, and bots act only through the host's screen.
+- Access. Sign-in is Google only. Making a room is open to anyone signed in, unless an admin switches the site back to invite-only. Rooms cannot be listed, so a room is found only by its code. Players write only their own player and position documents, and bots act only through the host's screen.
 
 ## Layout
 

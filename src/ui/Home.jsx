@@ -43,6 +43,16 @@ export function Home({ user, access, configured, onSignIn, onSignOut, onRedeem, 
       </section>
 
       <section className="tiles">
+        {configured && !(user && access && !access.member) && (
+          <button className="tile action primary" onClick={() => go("host")}>
+            <h3>
+              <Users size={16} /> Make a room
+            </h3>
+            <p className="dim small">Pick a length and the rounds, get a code, and friends join on their phones.</p>
+            {!user && <p className="dim small">You'll sign in with Google first.</p>}
+          </button>
+        )}
+
         {configured && (
           <form className="tile" onSubmit={join}>
             <h3>
@@ -56,15 +66,6 @@ export function Home({ user, access, configured, onSignIn, onSignOut, onRedeem, 
             </div>
             {!user && <p className="dim small">You'll sign in with Google first.</p>}
           </form>
-        )}
-
-        {user && access?.member && (
-          <button className="tile action" onClick={() => go("host")}>
-            <h3>
-              <Users size={16} /> Host a room
-            </h3>
-            <p className="dim small">5 to 30 minutes, four kinds of round, bots optional.</p>
-          </button>
         )}
 
         <button className="tile action" onClick={() => go("practice")}>
